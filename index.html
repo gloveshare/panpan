@@ -550,22 +550,6 @@
             transform: translateX(0);
         }
 
-        .debug-info {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 10px;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 12px;
-            color: #495057;
-            display: none;
-        }
-
-        .debug-info.show {
-            display: block;
-        }
-
         @media (max-width: 768px) {
             .search-main {
                 flex-direction: column;
@@ -592,7 +576,6 @@
             <input type="password" id="loginPassword" placeholder="密码">
             <button onclick="login()" id="loginBtn">登录</button>
             <div class="login-error" id="loginError"></div>
-            <div class="debug-info" id="debugInfo"></div>
         </div>
     </div>
 
@@ -723,226 +706,135 @@
 
     <script>
         // ================== 配置区域 ==================
-        const API_BASE = "https://pansou.glovetvbox.top/api";  // ✅ 修复：去掉 /api，避免路径重复
+        const API_BASE = 'https://pansou.glovetvbox.top';
         
-        let authToken = localStorage.getItem("pansou_token") || "";
-        let currentUsername = localStorage.getItem("pansou_user") || "";
-
-        // 调试日志
-        function debugLog(msg) {
-            console.log("[PanSou Debug]", msg);
-            const debugEl = document.getElementById("debugInfo");
-            if (debugEl) {
-                debugEl.classList.add("show");
-                debugEl.innerHTML += msg + "<br>";
-            }
-        }
+        let authToken = localStorage.getItem('pansou_token') || '';
+        let currentUsername = localStorage.getItem('pansou_user') || '';
 
         // ================== 认证功能 ==================
         window.onload = function() {
-            debugLog("页面加载，检查token...");
-            debugLog("Token: " + (authToken ? "存在" : "不存在"));
-            
             if (authToken) {
-                verifyToken();
-            } else {
-                debugLog("无token，显示登录界面");
-                showLoginContainer();
+                showMainContent();
             }
         };
 
-        async function verifyToken() {
-            try {
-                debugLog("验证token中...");
-                const response = await fetch(`${API_BASE}/api/auth/verify`, {
-                    method: "POST",
-                    headers: getAuthHeaders()
-                });
-
-                debugLog("验证响应状态: " + response.status);
-
-                if (response.ok) {
-                    const data = await response.json();
-                    debugLog("验证成功");
-                    showMainContent();
-                } else {
-                    debugLog("验证失败，清除token");
-                    clearAuthData();
-                    showLoginContainer();
-                    showLoginError("登录已过期，请重新登录");
-                }
-            } catch (err) {
-                debugLog("验证请求错误: " + err.message);
-                // 网络错误，但token存在，尝试继续使用
-                showMainContent();
-            }
-        }
-
         async function login() {
-            const username = document.getElementById("loginUsername").value.trim();
-            const password = document.getElementById("loginPassword").value;
-            const loginBtn = document.getElementById("loginBtn");
-            const loginError = document.getElementById("loginError");
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
 
             if (!username || !password) {
-                showLoginError("请输入用户名和密码");
+                showLoginError('请输入用户名和密码');
                 return;
             }
 
             loginBtn.disabled = true;
-            loginBtn.textContent = "登录中...";
-            loginError.classList.remove("show");
+            loginBtn.textContent = '登录中...';
+            loginError.classList.remove('show');
 
             try {
-                debugLog("发送登录请求...");
                 const response = await fetch(`${API_BASE}/api/auth/login`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
-                debugLog("登录响应状态: " + response.status);
                 const data = await response.json();
-                debugLog("登录响应: " + JSON.stringify(data));
 
-                // ✅ 修复：兼容错误判断
-                if (!response.ok || (data.code !== undefined && data.code !== 0)) {
-                    throw new Error(data.error || data.message || "登录失败");
+                if (!response.ok) {
+                    throw new Error(data.error || '登录失败');
                 }
 
-                // ✅ 修复：兼容token获取（支持 data.token 和 data.data.token）
-                authToken = data.data?.token || data.token;
-                currentUsername = data.username || data.data?.username || username;
-                
-                if (!authToken) {
-                    throw new Error("未获取到登录凭证");
-                }
-
-                localStorage.setItem("pansou_token", authToken);
-                localStorage.setItem("pansou_user", currentUsername);
-                
-                debugLog("登录成功，token已保存");
+                authToken = data.token;
+                currentUsername = username;
+                localStorage.setItem('pansou_token', authToken);
+                localStorage.setItem('pansou_user', currentUsername);
 
                 showMainContent();
 
             } catch (err) {
-                debugLog("登录错误: " + err.message);
-                showLoginError(err.message || "登录失败，请检查用户名密码");
+                showLoginError(err.message || '登录失败，请检查用户名密码');
             } finally {
                 loginBtn.disabled = false;
-                loginBtn.textContent = "登录";
+                loginBtn.textContent = '登录';
             }
         }
 
         function logout() {
-            debugLog("退出登录");
-            
-            // 调用退出接口
-            if (authToken) {
-                fetch(`${API_BASE}/api/auth/logout`, {
-                    method: "POST",
-                    headers: getAuthHeaders()
-                }).catch(() => {});
-            }
-            
-            clearAuthData();
-            showLoginContainer();
-            document.getElementById("loginPassword").value = "";
-            document.getElementById("debugInfo").innerHTML = "";
-            document.getElementById("debugInfo").classList.remove("show");
-        }
-
-        function clearAuthData() {
-            authToken = "";
-            currentUsername = "";
-            localStorage.removeItem("pansou_token");
-            localStorage.removeItem("pansou_user");
-            debugLog("认证数据已清除");
+            authToken = '';
+            currentUsername = '';
+            localStorage.removeItem('pansou_token');
+            localStorage.removeItem('pansou_user');
+            document.getElementById('loginContainer').classList.remove('hide');
+            document.getElementById('mainContent').classList.remove('show');
+            document.getElementById('loginPassword').value = '';
         }
 
         function showLoginError(message) {
-            const loginError = document.getElementById("loginError");
+            const loginError = document.getElementById('loginError');
             loginError.textContent = message;
-            loginError.classList.add("show");
-        }
-
-        function showLoginContainer() {
-            document.getElementById("loginContainer").classList.remove("hide");
-            document.getElementById("mainContent").classList.remove("show");
+            loginError.classList.add('show');
         }
 
         function showMainContent() {
-            document.getElementById("loginContainer").classList.add("hide");
-            document.getElementById("mainContent").classList.add("show");
-            document.getElementById("currentUser").textContent = currentUsername;
-            debugLog("显示主内容界面");
+            document.getElementById('loginContainer').classList.add('hide');
+            document.getElementById('mainContent').classList.add('show');
+            document.getElementById('currentUser').textContent = currentUsername;
         }
 
-        // 获取认证Header
         function getAuthHeaders() {
-            const headers = { 
-                "Content-Type": "application/json"
-            };
-            
+            const headers = { 'Content-Type': 'application/json' };
             if (authToken) {
-                headers["Authorization"] = "Bearer " + authToken;
+                headers['Authorization'] = `Bearer ${authToken}`;
             }
-            
             return headers;
-        }
-
-        // 处理401未授权错误
-        function handleUnauthorized() {
-            debugLog("处理401未授权");
-            clearAuthData();
-            showLoginContainer();
-            showLoginError("登录已过期，请重新登录");
         }
 
         // ================== 搜索功能 ==================
         const PAN_TYPES = {
-            "115": { name: "115网盘", color: "#ff6b35", icon: "🟤" },
-            "123": { name: "123网盘", color: "#28a745", icon: "🔢" },
-            "mobile": { name: "移动云盘", color: "#007bff", icon: "🟡" },
-            "xunlei": { name: "迅雷网盘", color: "#ffc107", icon: "⚡" },
-            "aliyun": { name: "阿里云盘", color: "#6f42c1", icon: "🟠" },
-            "uc": { name: "UC网盘", color: "#dc3545", icon: "🟢" },
-            "tianyi": { name: "天翼云盘", color: "#e83e8c", icon: "🔴" },
-            "quark": { name: "夸克网盘", color: "#6610f2", icon: "🟣" },
-            "baidu": { name: "百度网盘", color: "#0d6efd", icon: "🔵" },
-            "others": { name: "其他网盘", color: "#6c757d", icon: "📁" },
-            "magnet": { name: "磁力链接", color: "#e91e63", icon: "🧲" },
-            "ed2k": { name: "电驴链接", color: "#3f51b5", icon: "🐴" }
+            '115': { name: '115网盘', color: '#ff6b35', icon: '🟤' },
+            '123': { name: '123网盘', color: '#28a745', icon: '🔢' },
+            'mobile': { name: '移动云盘', color: '#007bff', icon: '🟡' },
+            'xunlei': { name: '迅雷网盘', color: '#ffc107', icon: '⚡' },
+            'aliyun': { name: '阿里云盘', color: '#6f42c1', icon: '🟠' },
+            'uc': { name: 'UC网盘', color: '#dc3545', icon: '🟢' },
+            'tianyi': { name: '天翼云盘', color: '#e83e8c', icon: '🔴' },
+            'quark': { name: '夸克网盘', color: '#6610f2', icon: '🟣' },
+            'baidu': { name: '百度网盘', color: '#0d6efd', icon: '🔵' },
+            'others': { name: '其他网盘', color: '#6c757d', icon: '📁' },
+            'magnet': { name: '磁力链接', color: '#e91e63', icon: '🧲' },
+            'ed2k': { name: '电驴链接', color: '#3f51b5', icon: '🐴' }
         };
 
         let currentResults = {};
         let allResources = [];
 
-        const searchForm = document.getElementById("searchForm");
-        const keywordInput = document.getElementById("keyword");
-        const searchBtn = document.getElementById("searchBtn");
-        const btnText = document.getElementById("btnText");
-        const loading = document.getElementById("loading");
-        const error = document.getElementById("error");
-        const results = document.getElementById("results");
-        const resultsCount = document.getElementById("resultsCount");
-        const tabsNav = document.getElementById("tabsNav");
-        const tabsContent = document.getElementById("tabsContent");
-        const usageGuide = document.getElementById("usageGuide");
-        const optionsToggle = document.getElementById("optionsToggle");
-        const advancedOptions = document.getElementById("advancedOptions");
-        const resultType = document.getElementById("resultType");
-        const sourceType = document.getElementById("sourceType");
-        const concurrency = document.getElementById("concurrency");
-        const channels = document.getElementById("channels");
-        const refresh = document.getElementById("refresh");
+        const searchForm = document.getElementById('searchForm');
+        const keywordInput = document.getElementById('keyword');
+        const searchBtn = document.getElementById('searchBtn');
+        const btnText = document.getElementById('btnText');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const results = document.getElementById('results');
+        const resultsCount = document.getElementById('resultsCount');
+        const tabsNav = document.getElementById('tabsNav');
+        const tabsContent = document.getElementById('tabsContent');
+        const usageGuide = document.getElementById('usageGuide');
+        const optionsToggle = document.getElementById('optionsToggle');
+        const advancedOptions = document.getElementById('advancedOptions');
+        const resultType = document.getElementById('resultType');
+        const sourceType = document.getElementById('sourceType');
+        const concurrency = document.getElementById('concurrency');
+        const channels = document.getElementById('channels');
+        const refresh = document.getElementById('refresh');
 
-        optionsToggle.addEventListener("click", () => {
-            advancedOptions.classList.toggle("collapsed");
-            optionsToggle.textContent = advancedOptions.classList.contains("collapsed") ? "🔧 高级选项" : "🔧 收起选项";
+        optionsToggle.addEventListener('click', () => {
+            advancedOptions.classList.toggle('collapsed');
+            optionsToggle.textContent = advancedOptions.classList.contains('collapsed') ? '🔧 高级选项' : '🔧 收起选项';
         });
 
-        searchForm.addEventListener("submit", async (e) => {
+        searchForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             await performSearch();
         });
@@ -951,10 +843,9 @@
             const keyword = keywordInput.value.trim();
             if (!keyword) return;
 
-            // 检查是否已登录
             if (!authToken) {
-                debugLog("搜索时无token，跳转登录");
-                handleUnauthorized();
+                logout();
+                showLoginError('登录已过期，请重新登录');
                 return;
             }
 
@@ -962,58 +853,54 @@
             hideError();
             hideResults();
 
-            tabsNav.innerHTML = "";
-            tabsContent.innerHTML = "";
+            tabsNav.innerHTML = '';
+            tabsContent.innerHTML = '';
             currentResults = {};
             allResources = [];
 
             try {
                 const params = new URLSearchParams();
-                params.append("kw", keyword);
+                params.append('kw', keyword);
 
-                if (resultType.value !== "merge") params.append("res", resultType.value);
-                if (sourceType.value !== "all") params.append("src", sourceType.value);
-                if (concurrency.value) params.append("conc", concurrency.value);
-                if (channels.value && channels.value.trim() !== "") {
-                    const channelList = channels.value.split("\n").map(c => c.trim()).filter(c => c);
-                    if (channelList.length > 0) params.append("channels", JSON.stringify(channelList));
+                if (resultType.value !== 'merge') params.append('res', resultType.value);
+                if (sourceType.value !== 'all') params.append('src', sourceType.value);
+                if (concurrency.value) params.append('conc', concurrency.value);
+                if (channels.value && channels.value.trim() !== '') {
+                    const channelList = channels.value.split('\n').map(c => c.trim()).filter(c => c);
+                    if (channelList.length > 0) params.append('channels', JSON.stringify(channelList));
                 }
-                if (refresh.checked) params.append("refresh", "true");
+                if (refresh.checked) params.append('refresh', 'true');
 
                 const url = `${API_BASE}/api/search?${params.toString()}`;
-                debugLog("搜索URL: " + url);
+                console.log('请求URL:', url);
 
                 const response = await fetch(url, {
-                    method: "GET",
+                    method: 'GET',
                     headers: getAuthHeaders()
                 });
 
-                debugLog("搜索响应状态: " + response.status);
-
-                // 处理401未授权
                 if (response.status === 401) {
-                    handleUnauthorized();
-                    throw new Error("登录已过期，请重新登录");
+                    logout();
+                    showLoginError('登录已过期，请重新登录');
+                    throw new Error('未授权');
                 }
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                debugLog("搜索成功");
+                console.log('API响应:', data);
 
-                // 兼容不同返回格式
-                if (data.code !== undefined && data.code !== 0) {
-                    throw new Error(data.message || data.error || "搜索失败");
+                if (data.code !== 0) {
+                    throw new Error(data.message || '搜索失败');
                 }
 
-                displayResults(data.data || data);
+                displayResults(data);
 
             } catch (err) {
-                if (!err.message.includes("登录已过期")) {
-                    showError("搜索失败: " + err.message);
+                if (err.message !== '未授权') {
+                    showError(`搜索失败: ${err.message}`);
                 }
             } finally {
                 hideLoading();
@@ -1021,10 +908,10 @@
         }
 
         function displayResults(data) {
-            tabsNav.innerHTML = "";
-            tabsContent.innerHTML = "";
+            tabsNav.innerHTML = '';
+            tabsContent.innerHTML = '';
 
-            let mergedByType = data.merged_by_type || data.mergedByType || {};
+            let mergedByType = data.data?.merged_by_type || data.merged_by_type;
             if (!mergedByType || Object.keys(mergedByType).length === 0) {
                 showEmptyState();
                 return;
@@ -1046,10 +933,10 @@
 
         function generateTabs(mergedByType) {
             const allCount = Object.values(mergedByType).reduce((sum, r) => sum + r.length, 0);
-            createTab("all", "全部", "📋", allCount, true);
+            createTab('all', '全部', '📋', allCount, true);
 
             for (const [platformType, resources] of Object.entries(mergedByType)) {
-                const info = PAN_TYPES[platformType] || { name: platformType, color: "#6c757d", icon: "📁" };
+                const info = PAN_TYPES[platformType] || { name: platformType, color: '#6c757d', icon: '📁' };
                 createTab(platformType, info.name, info.icon, resources.length);
             }
 
@@ -1057,56 +944,56 @@
         }
 
         function createTab(id, name, icon, count, isActive = false) {
-            const button = document.createElement("button");
-            button.className = `tab-button ${isActive ? "active" : ""}`;
-            button.setAttribute("data-tab", id);
+            const button = document.createElement('button');
+            button.className = `tab-button ${isActive ? 'active' : ''}`;
+            button.setAttribute('data-tab', id);
             button.innerHTML = `<span>${icon}</span><span>${name}</span><span class="tab-count">${count}</span>`;
-            button.addEventListener("click", () => switchTab(id));
+            button.addEventListener('click', () => switchTab(id));
             tabsNav.appendChild(button);
         }
 
         function generateTabContent(mergedByType) {
-            const allContent = document.createElement("div");
-            allContent.className = "tab-content active";
-            allContent.setAttribute("data-tab-content", "all");
+            const allContent = document.createElement('div');
+            allContent.className = 'tab-content active';
+            allContent.setAttribute('data-tab-content', 'all');
 
-            let allHTML = "";
+            let allHTML = '';
             for (const [platformType, resources] of Object.entries(mergedByType)) {
-                const info = PAN_TYPES[platformType] || { name: platformType, color: "#6c757d", icon: "📁" };
+                const info = PAN_TYPES[platformType] || { name: platformType, color: '#6c757d', icon: '📁' };
                 allHTML += createResourceList(resources, info);
             }
             allContent.innerHTML = allHTML;
             tabsContent.appendChild(allContent);
 
             for (const [platformType, resources] of Object.entries(mergedByType)) {
-                const info = PAN_TYPES[platformType] || { name: platformType, color: "#6c757d", icon: "📁" };
-                const content = document.createElement("div");
-                content.className = "tab-content";
-                content.setAttribute("data-tab-content", platformType);
+                const info = PAN_TYPES[platformType] || { name: platformType, color: '#6c757d', icon: '📁' };
+                const content = document.createElement('div');
+                content.className = 'tab-content';
+                content.setAttribute('data-tab-content', platformType);
                 content.innerHTML = createResourceList(resources, info);
                 tabsContent.appendChild(content);
             }
         }
 
         function createResourceList(resources, info) {
-            let html = "";
+            let html = '';
             resources.forEach(resource => {
-                let dateStr = "时间未知";
-                if (resource.datetime && resource.datetime !== "0001-01-01T00:00:00Z") {
+                let dateStr = '时间未知';
+                if (resource.datetime && resource.datetime !== '0001-01-01T00:00:00Z') {
                     try {
                         const date = new Date(resource.datetime);
                         if (!isNaN(date.getTime())) {
-                            dateStr = date.toLocaleDateString("zh-CN") + " " + date.toLocaleTimeString("zh-CN");
+                            dateStr = date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN');
                         }
                     } catch (e) {}
                 }
 
-                const title = (resource.note || resource.title || "资源链接")
-                    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+                const title = (resource.note || resource.title || '资源链接')
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\"/g, '&quot;').replace(/'/g, '&#039;');
                 
-                const resourceUrl = resource.url ? resource.url.replace(/"/g, "&quot;") : "";
-                const password = resource.password ? resource.password.replace(/"/g, "&quot;") : "";
+                const resourceUrl = resource.url ? resource.url.replace(/\"/g, '&quot;') : '';
+                const password = resource.password ? resource.password.replace(/\"/g, '&quot;') : '';
 
                 html += `
                     <div class="resource-item">
@@ -1116,7 +1003,7 @@
                         </div>
                         <div class="resource-meta">
                             <span>📅 ${dateStr}</span>
-                            ${password ? `<span>🔑 提取码: ${password}</span>` : ""}
+                            ${password ? `<span>🔑 提取码: ${password}</span>` : ''}
                         </div>
                         <div class="resource-actions">
                             <button class="copy-btn" onclick="copyToClipboard('${resourceUrl}', '${password}')">📋 复制链接</button>
@@ -1129,14 +1016,14 @@
         }
 
         function switchTab(tabId) {
-            document.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
-            document.querySelector(`[data-tab="${tabId}"]`).classList.add("active");
-            document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-            document.querySelector(`[data-tab-content="${tabId}"]`).classList.add("active");
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[data-tab-content="${tabId}"]`).classList.add('active');
         }
 
         function showEmptyState() {
-            tabsNav.innerHTML = "";
+            tabsNav.innerHTML = '';
             tabsContent.innerHTML = `
                 <div style="text-align: center; padding: 60px 20px; color: #6c757d;">
                     <div style="font-size: 4em; margin-bottom: 20px; opacity: 0.5;">🔍</div>
@@ -1144,8 +1031,8 @@
                     <p style="font-size: 1.1em;">请尝试使用其他关键词搜索</p>
                 </div>
             `;
-            resultsCount.textContent = "未找到资源";
-            usageGuide.classList.add("hidden");
+            resultsCount.textContent = '未找到资源';
+            usageGuide.classList.add('hidden');
             showResults();
         }
 
@@ -1153,69 +1040,69 @@
             const text = password ? `${url}\n提取码: ${password}` : url;
             try {
                 await navigator.clipboard.writeText(text);
-                showToast("链接已复制到剪贴板！");
+                showToast('链接已复制到剪贴板！');
             } catch (err) {
-                const textArea = document.createElement("textarea");
+                const textArea = document.createElement('textarea');
                 textArea.value = text;
-                textArea.style.position = "fixed";
-                textArea.style.opacity = "0";
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
                 document.body.appendChild(textArea);
                 textArea.select();
-                document.execCommand("copy");
+                document.execCommand('copy');
                 document.body.removeChild(textArea);
-                showToast("链接已复制到剪贴板！");
+                showToast('链接已复制到剪贴板！');
             }
         }
 
         function showToast(message) {
-            const existing = document.querySelector(".toast");
+            const existing = document.querySelector('.toast');
             if (existing) existing.remove();
 
-            const toast = document.createElement("div");
-            toast.className = "toast";
+            const toast = document.createElement('div');
+            toast.className = 'toast';
             toast.textContent = message;
             document.body.appendChild(toast);
 
-            setTimeout(() => toast.classList.add("show"), 100);
+            setTimeout(() => toast.classList.add('show'), 100);
             setTimeout(() => {
-                toast.classList.remove("show");
+                toast.classList.remove('show');
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
 
         function showLoading() {
-            loading.style.display = "block";
+            loading.style.display = 'block';
             searchBtn.disabled = true;
-            btnText.textContent = "搜索中...";
-            usageGuide.classList.add("hidden");
+            btnText.textContent = '搜索中...';
+            usageGuide.classList.add('hidden');
         }
 
         function hideLoading() {
-            loading.style.display = "none";
+            loading.style.display = 'none';
             searchBtn.disabled = false;
-            btnText.textContent = "搜索";
+            btnText.textContent = '搜索';
         }
 
         function showError(message) {
             error.textContent = message;
-            error.style.display = "block";
+            error.style.display = 'block';
         }
 
         function hideError() {
-            error.style.display = "none";
+            error.style.display = 'none';
         }
 
         function showResults() {
-            results.style.display = "block";
+            results.style.display = 'block';
         }
 
         function hideResults() {
-            results.style.display = "none";
+            results.style.display = 'none';
         }
 
         // 回车键登录
-        document.getElementById("loginPassword").addEventListener("keypress", function(e) {
-            if (e.key === "Enter") login();
+        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
         });
     </script>
 </body>
