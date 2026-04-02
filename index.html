@@ -705,54 +705,29 @@
     </div>
 
     <script>
-        // ================== 配置区域 ==================
-        // !!! 重要：请将下面的 API_BASE 地址替换为你实际部署的 PanSou 后端地址 !!!
-        const API_BASE = 'https://pansou.glovetvbox.top/api';
+        // ================== 配置区 ==================
+        const API_BASE = 'https://pansou.glovetvbox.top/api'; // 修为你的 PanSou API 地址
         
         let authToken = localStorage.getItem('pansou_token') || '';
         let currentUsername = localStorage.getItem('pansou_user') || '';
 
-        console.log('初始化 - authToken:', authToken ? authToken.substring(0, 30) + '...' : '无');
-        console.log('初始化 - currentUsername:', currentUsername);
-
-        // ================== 认证功能 ==================
+        // ================== 初始化 ==================
         window.onload = async function() {
-            console.log('页面加载完成');
             if (authToken) {
-                console.log('检测到已有 token，开始验证...');
-                if (await verifyToken()) {
-                    console.log('Token 验证成功');
+                // 如果有 token 先验证
+                const valid = await verifyToken();
+                if (valid) {
                     showMainContent();
-                } else {
-                    console.log('Token 验证失败，清除登录状态');
-                    logout();
-                }
-            } else {
-                console.log('未检测到 token，显示登录界面');
+                    return;
+                } 
+                // token 无效或过期 清除
+                localStorage.removeItem('pansou_token');
+                localStorage.removeItem('pansou_user');
+                authToken = '';
             }
         };
 
-        async function verifyToken() {
-            try {
-                console.log('验证 Token:', authToken.substring(0, 30) + '...');
-                const response = await fetch(`${API_BASE}/api/auth/verify`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                console.log('验证接口响应状态:', response.status);
-                if (!response.ok) return false;
-                const data = await response.json();
-                console.log('验证接口返回数据:', data);
-                return data.valid === true;
-            } catch (error) {
-                console.error('验证 token 失败:', error);
-                return false;
-            }
-        }
-
+        // ================== 登录相关 ==================
         async function login() {
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
@@ -763,91 +738,88 @@
                 showLoginError('请输入用户名和密码');
                 return;
             }
-
             loginBtn.disabled = true;
             loginBtn.textContent = '登录中...';
             loginError.classList.remove('show');
 
             try {
-                console.log('开始登录，用户名:', username);
-                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
-                console.log('登录响应状态:', response.status);
-                const data = await response.json();
-                console.log('登录响应数据:', data);
+                const data = await res.json();
 
-                if (!response.ok || !data.token) {
+                if (!res.ok || !data.token) {
                     throw new Error(data.error || '登录失败');
                 }
 
                 authToken = data.token;
                 currentUsername = data.username || username;
-
-                console.log('登录成功，Token 已获取:', authToken.substring(0, 30) + '...');
-
                 localStorage.setItem('pansou_token', authToken);
                 localStorage.setItem('pansou_user', currentUsername);
 
                 showMainContent();
-            } catch (err) {
-                console.error('登录错误:', err);
-                showLoginError(err.message || '登录失败，请检查用户名密码');
+            } catch (e) {
+                showLoginError(e.message);
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = '登录';
             }
         }
 
+        async function verifyToken() {
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/verify`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                return res.ok && data.valid === true;
+            } catch {
+                return false;
+            }
+        }
+
         function logout() {
-            console.log('执行退出登录');
             authToken = '';
             currentUsername = '';
             localStorage.removeItem('pansou_token');
             localStorage.removeItem('pansou_user');
             document.getElementById('loginContainer').classList.remove('hide');
             document.getElementById('mainContent').classList.remove('show');
-            // 清空密码框
-            const pwdInput = document.getElementById('loginPassword');
-            if (pwdInput) pwdInput.value = '';
-            // 清空错误提示
+            document.getElementById('loginPassword').value = '';
             const loginError = document.getElementById('loginError');
             loginError.classList.remove('show');
             loginError.textContent = '';
         }
 
-        function showLoginError(message) {
+        function showLoginError(msg) {
             const loginError = document.getElementById('loginError');
-            loginError.textContent = message;
+            loginError.textContent = msg;
             loginError.classList.add('show');
         }
 
         function showMainContent() {
-            console.log('显示主内容，当前用户:', currentUsername);
             document.getElementById('loginContainer').classList.add('hide');
             document.getElementById('mainContent').classList.add('show');
             document.getElementById('currentUser').textContent = currentUsername;
         }
 
+        // ================== API 调用 Header 封装 ==================
         function getAuthHeaders() {
-            const headers = {
-                'Content-Type': 'application/json'
-            };
+            const headers = { 'Content-Type': 'application/json' };
             if (authToken) {
                 headers['Authorization'] = `Bearer ${authToken}`;
-                console.log('添加认证头成功, Token:', authToken.substring(0, 30) + '...');
-            } else {
-                console.error('错误: authToken 为空！无法添加认证头');
-                console.error('当前 authToken 值:', authToken);
-                console.error('localStorage 中的 token:', localStorage.getItem('pansou_token'));
             }
             return headers;
         }
 
-        // ================== 搜索功能 ==================
+        // ================== 搜索逻辑 ==================
         const PAN_TYPES = {
             '115': { name: '115网盘', color: '#ff6b35', icon: '🟤' },
             '123': { name: '123网盘', color: '#28a745', icon: '🔢' },
@@ -897,24 +869,11 @@
 
         async function performSearch() {
             const keyword = keywordInput.value.trim();
-            if (!keyword) {
-                showError('请输入搜索关键词');
-                return;
-            }
+            if (!keyword) return;
 
-            // 重新从 localStorage 获取最新的 token
-            const currentToken = localStorage.getItem('pansou_token');
-            if (currentToken && currentToken !== authToken) {
-                console.log('更新 token 从 localStorage');
-                authToken = currentToken;
-            }
-
-            console.log('开始搜索，当前 authToken:', authToken ? authToken.substring(0, 30) + '...' : '无');
-            
             if (!authToken) {
-                console.error('搜索失败: authToken 为空');
-                showError('认证信息丢失，请重新登录');
                 logout();
+                showLoginError('登录已过期，请重新登录');
                 return;
             }
 
@@ -941,35 +900,15 @@
                 if (refresh.checked) params.append('refresh', 'true');
 
                 const url = `${API_BASE}/api/search?${params.toString()}`;
-                console.log('请求URL:', url);
-
-                // 构建请求头
-                const requestHeaders = {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                };
-                console.log('请求头:', requestHeaders);
-
+                
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: requestHeaders
+                    headers: getAuthHeaders()
                 });
-
-                console.log('响应状态:', response.status);
-                console.log('响应头:', response.headers);
-
+                
                 if (response.status === 401) {
-                    const errorText = await response.text();
-                    console.error('401 错误响应:', errorText);
-                    let errorMsg = '认证失败';
-                    try {
-                        const errorData = JSON.parse(errorText);
-                        errorMsg = errorData.error || errorData.message || '认证失败，请重新登录';
-                    } catch (e) {
-                        errorMsg = errorText || '认证失败，请重新登录';
-                    }
-                    showError(errorMsg);
                     logout();
+                    showLoginError('登录已过期，请重新登录');
                     return;
                 }
 
@@ -983,8 +922,7 @@
                 }
 
                 const data = await response.json();
-                console.log('API响应成功:', data);
-
+                
                 // 兼容两种数据格式
                 let mergedByType = data.data?.merged_by_type || data.merged_by_type;
                 
@@ -994,10 +932,8 @@
                 }
 
                 displayResults({ merged_by_type: mergedByType });
-
-            } catch (err) {
-                console.error('搜索错误:', err);
-                showError(`搜索失败: ${err.message}`);
+            } catch (e) {
+                showError('搜索失败: ' + e.message);
             } finally {
                 hideLoading();
             }
@@ -1182,12 +1118,11 @@
         function showError(message) {
             error.textContent = message;
             error.style.display = 'block';
-            // 8秒后自动隐藏错误信息
             setTimeout(() => {
                 if (error.textContent === message) {
                     hideError();
                 }
-            }, 8000);
+            }, 5000);
         }
 
         function hideError() {
@@ -1204,12 +1139,9 @@
         }
 
         // 回车键登录
-        const pwdInput = document.getElementById('loginPassword');
-        if (pwdInput) {
-            pwdInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') login();
-            });
-        }
+        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
     </script>
 </body>
 </html>
