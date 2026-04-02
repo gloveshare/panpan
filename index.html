@@ -551,6 +551,22 @@ html_code = '''<!DOCTYPE html>
             transform: translateX(0);
         }
 
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            color: #495057;
+            display: none;
+        }
+
+        .debug-info.show {
+            display: block;
+        }
+
         @media (max-width: 768px) {
             .search-main {
                 flex-direction: column;
@@ -577,6 +593,7 @@ html_code = '''<!DOCTYPE html>
             <input type="password" id="loginPassword" placeholder="密码">
             <button onclick="login()" id="loginBtn">登录</button>
             <div class="login-error" id="loginError"></div>
+            <div class="debug-info" id="debugInfo"></div>
         </div>
     </div>
 
@@ -712,30 +729,57 @@ html_code = '''<!DOCTYPE html>
         let authToken = localStorage.getItem("pansou_token") || "";
         let currentUsername = localStorage.getItem("pansou_user") || "";
 
+        // 调试日志
+        function debugLog(msg) {
+            console.log("[PanSou Debug]", msg);
+            const debugEl = document.getElementById("debugInfo");
+            if (debugEl) {
+                debugEl.classList.add("show");
+                debugEl.innerHTML += msg + "<br>";
+            }
+        }
+
         // ================== 认证功能 ==================
         window.onload = function() {
+            debugLog("页面加载，检查token...");
+            debugLog("Token: " + (authToken ? "存在 (" + authToken.substring(0, 20) + "...)" : "不存在"));
+            
             if (authToken) {
-                // 验证token是否有效
                 verifyToken();
+            } else {
+                debugLog("无token，显示登录界面");
+                showLoginContainer();
             }
         };
 
         async function verifyToken() {
             try {
+                debugLog("验证token中...");
+                const headers = getAuthHeaders();
+                debugLog("请求头: " + JSON.stringify(headers));
+                
                 const response = await fetch(`${API_BASE}/api/auth/verify`, {
                     method: "POST",
-                    headers: getAuthHeaders()
+                    headers: headers,
+                    credentials: "include"
                 });
 
+                debugLog("验证响应状态: " + response.status);
+
                 if (response.ok) {
+                    const data = await response.json();
+                    debugLog("验证成功: " + JSON.stringify(data));
                     showMainContent();
                 } else {
-                    // Token无效，清除并显示登录
+                    const errorData = await response.json().catch(() => ({}));
+                    debugLog("验证失败: " + JSON.stringify(errorData));
                     clearAuthData();
                     showLoginContainer();
+                    showLoginError("登录已过期，请重新登录");
                 }
             } catch (err) {
-                // 网络错误，假设token有效（可能后端暂时不可用）
+                debugLog("验证请求错误: " + err.message);
+                // 网络错误，但token存在，尝试继续使用
                 showMainContent();
             }
         }
@@ -756,13 +800,17 @@ html_code = '''<!DOCTYPE html>
             loginError.classList.remove("show");
 
             try {
+                debugLog("发送登录请求...");
                 const response = await fetch(`${API_BASE}/api/auth/login`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    credentials: "include"
                 });
 
+                debugLog("登录响应状态: " + response.status);
                 const data = await response.json();
+                debugLog("登录响应数据: " + JSON.stringify(data));
 
                 if (!response.ok) {
                     throw new Error(data.error || "登录失败");
@@ -773,10 +821,13 @@ html_code = '''<!DOCTYPE html>
                 currentUsername = data.username || username;
                 localStorage.setItem("pansou_token", authToken);
                 localStorage.setItem("pansou_user", currentUsername);
+                
+                debugLog("登录成功，token已保存");
 
                 showMainContent();
 
             } catch (err) {
+                debugLog("登录错误: " + err.message);
                 showLoginError(err.message || "登录失败，请检查用户名密码");
             } finally {
                 loginBtn.disabled = false;
@@ -785,15 +836,22 @@ html_code = '''<!DOCTYPE html>
         }
 
         function logout() {
+            debugLog("退出登录");
+            
             // 调用退出接口
-            fetch(`${API_BASE}/api/auth/logout`, {
-                method: "POST",
-                headers: getAuthHeaders()
-            }).catch(() => {});
+            if (authToken) {
+                fetch(`${API_BASE}/api/auth/logout`, {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    credentials: "include"
+                }).catch(() => {});
+            }
             
             clearAuthData();
             showLoginContainer();
             document.getElementById("loginPassword").value = "";
+            document.getElementById("debugInfo").innerHTML = "";
+            document.getElementById("debugInfo").classList.remove("show");
         }
 
         function clearAuthData() {
@@ -801,6 +859,7 @@ html_code = '''<!DOCTYPE html>
             currentUsername = "";
             localStorage.removeItem("pansou_token");
             localStorage.removeItem("pansou_user");
+            debugLog("认证数据已清除");
         }
 
         function showLoginError(message) {
@@ -818,19 +877,28 @@ html_code = '''<!DOCTYPE html>
             document.getElementById("loginContainer").classList.add("hide");
             document.getElementById("mainContent").classList.add("show");
             document.getElementById("currentUser").textContent = currentUsername;
+            debugLog("显示主内容界面");
         }
 
         // 获取认证Header - 使用Bearer Token格式
         function getAuthHeaders() {
-            const headers = { "Content-Type": "application/json" };
+            const headers = { 
+                "Content-Type": "application/json"
+            };
+            
             if (authToken) {
-                headers["Authorization"] = `Bearer ${authToken}`;
+                headers["Authorization"] = "Bearer " + authToken;
+                debugLog("添加Authorization头: Bearer " + authToken.substring(0, 20) + "...");
+            } else {
+                debugLog("警告: 没有token，未添加Authorization头");
             }
+            
             return headers;
         }
 
         // 处理401未授权错误
         function handleUnauthorized() {
+            debugLog("处理401未授权");
             clearAuthData();
             showLoginContainer();
             showLoginError("登录已过期，请重新登录");
@@ -890,6 +958,7 @@ html_code = '''<!DOCTYPE html>
 
             // 检查是否已登录
             if (!authToken) {
+                debugLog("搜索时无token，跳转登录");
                 handleUnauthorized();
                 return;
             }
@@ -917,17 +986,26 @@ html_code = '''<!DOCTYPE html>
                 if (refresh.checked) params.append("refresh", "true");
 
                 const url = `${API_BASE}/api/search?${params.toString()}`;
-                console.log("请求URL:", url);
+                debugLog("搜索URL: " + url);
+
+                const headers = getAuthHeaders();
+                debugLog("搜索请求头: " + JSON.stringify(headers));
 
                 const response = await fetch(url, {
                     method: "GET",
-                    headers: getAuthHeaders()
+                    headers: headers,
+                    credentials: "include",
+                    mode: "cors"
                 });
+
+                debugLog("搜索响应状态: " + response.status);
 
                 // 处理401未授权
                 if (response.status === 401) {
+                    const errorData = await response.json().catch(() => ({}));
+                    debugLog("401错误详情: " + JSON.stringify(errorData));
                     handleUnauthorized();
-                    throw new Error("未授权");
+                    throw new Error("未授权: " + (errorData.error || "Token无效"));
                 }
 
                 if (!response.ok) {
@@ -936,7 +1014,7 @@ html_code = '''<!DOCTYPE html>
                 }
 
                 const data = await response.json();
-                console.log("API响应:", data);
+                debugLog("搜索响应数据: " + JSON.stringify(data).substring(0, 200) + "...");
 
                 if (data.code !== 0 && data.code !== undefined) {
                     throw new Error(data.message || data.error || "搜索失败");
@@ -945,8 +1023,8 @@ html_code = '''<!DOCTYPE html>
                 displayResults(data);
 
             } catch (err) {
-                if (err.message !== "未授权") {
-                    showError(`搜索失败: ${err.message}`);
+                if (err.message && !err.message.includes("未授权")) {
+                    showError("搜索失败: " + err.message);
                 }
             } finally {
                 hideLoading();
@@ -1052,8 +1130,8 @@ html_code = '''<!DOCTYPE html>
                             ${password ? `<span>🔑 提取码: ${password}</span>` : ""}
                         </div>
                         <div class="resource-actions">
-                            <button class="copy-btn" onclick="copyToClipboard("${resourceUrl}", "${password}")">📋 复制链接</button>
-                            <button class="open-btn" onclick="window.open("${resourceUrl}", "_blank")">🔗 打开链接</button>
+                            <button class="copy-btn" onclick="copyToClipboard(&quot;${resourceUrl}&quot;, &quot;${password}&quot;)">📋 复制链接</button>
+                            <button class="open-btn" onclick="window.open(&quot;${resourceUrl}&quot;, &quot;_blank&quot;)">🔗 打开链接</button>
                         </div>
                     </div>
                 `;
