@@ -32,6 +32,10 @@
             z-index: 9999;
         }
 
+        .login-container.hide {
+            display: none;
+        }
+
         .login-box {
             background: white;
             padding: 40px;
@@ -105,10 +109,6 @@
 
         .main-content.show {
             display: block;
-        }
-
-        .login-container.hide {
-            display: none;
         }
 
         .user-info {
@@ -247,7 +247,7 @@
             cursor: pointer;
             font-size: 0.9em;
             text-decoration: underline;
-            padding: 5px 0;
+            padding: 5px;
             text-align: center;
             width: 100%;
         }
@@ -707,7 +707,7 @@
     <script>
         // ================== 配置区域 ==================
         // !!! 重要：请将下面的 API_BASE 地址替换为你实际部署的 PanSou 后端地址 !!!
-        const API_BASE = 'https://pansou.glovetvbox.top/api';
+        const API_BASE = 'https://'pansou.glovetvbox.top/api';
         
         let authToken = localStorage.getItem('pansou_token') || '';
         let currentUsername = localStorage.getItem('pansou_user') || '';
@@ -735,7 +735,8 @@
                 if (!response.ok) return false;
                 const data = await response.json();
                 return data.valid === true;
-            } catch {
+            } catch (error) {
+                console.error('验证 token 失败:', error);
                 return false;
             }
         }
@@ -793,6 +794,10 @@
             // 清空密码框
             const pwdInput = document.getElementById('loginPassword');
             if (pwdInput) pwdInput.value = '';
+            // 清空错误提示
+            const loginError = document.getElementById('loginError');
+            loginError.classList.remove('show');
+            loginError.textContent = '';
         }
 
         function showLoginError(message) {
@@ -808,9 +813,14 @@
         }
 
         function getAuthHeaders() {
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = {
+                'Content-Type': 'application/json'
+            };
             if (authToken) {
                 headers['Authorization'] = `Bearer ${authToken}`;
+                console.log('已添加认证头:', headers['Authorization'].substring(0, 30) + '...');
+            } else {
+                console.warn('警告: authToken 为空，无法添加认证头');
             }
             return headers;
         }
@@ -865,11 +875,14 @@
 
         async function performSearch() {
             const keyword = keywordInput.value.trim();
-            if (!keyword) return;
+            if (!keyword) {
+                showError('请输入搜索关键词');
+                return;
+            }
 
             if (!authToken) {
+                showError('认证已过期，请重新登录');
                 logout();
-                showLoginError('登录已过期，请重新登录');
                 return;
             }
 
@@ -897,15 +910,23 @@
 
                 const url = `${API_BASE}/api/search?${params.toString()}`;
                 console.log('请求URL:', url);
+                console.log('使用的 Token:', authToken ? authToken.substring(0, 30) + '...' : '无 Token');
+
+                const headers = getAuthHeaders();
+                console.log('请求头:', headers);
 
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: getAuthHeaders()
+                    headers: headers
                 });
 
+                console.log('响应状态:', response.status);
+
                 if (response.status === 401) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('401 错误详情:', errorData);
+                    showError('认证失败：' + (errorData.error || '请重新登录'));
                     logout();
-                    showLoginError('登录已过期，请重新登录');
                     return;
                 }
 
@@ -1118,10 +1139,17 @@
         function showError(message) {
             error.textContent = message;
             error.style.display = 'block';
+            // 5秒后自动隐藏错误信息
+            setTimeout(() => {
+                if (error.textContent === message) {
+                    hideError();
+                }
+            }, 5000);
         }
 
         function hideError() {
             error.style.display = 'none';
+            error.textContent = '';
         }
 
         function showResults() {
