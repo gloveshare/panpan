@@ -141,6 +141,25 @@
             background: #c82333;
         }
 
+        /* 跳过登录按钮 */
+        .skip-login {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .skip-login button {
+            background: transparent;
+            color: #6c757d;
+            border: 1px solid #6c757d;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        .skip-login button:hover {
+            background: #6c757d;
+            color: white;
+        }
+
         /* 原有样式 */
         .container {
             max-width: 1200px;
@@ -576,12 +595,15 @@
             <input type="password" id="loginPassword" placeholder="密码">
             <button onclick="login()" id="loginBtn">登录</button>
             <div class="login-error" id="loginError"></div>
+            <div class="skip-login">
+                <button onclick="skipLogin()">无需登录，直接搜索</button>
+            </div>
         </div>
     </div>
 
     <!-- 主内容 -->
     <div class="main-content" id="mainContent">
-        <div class="user-info">
+        <div class="user-info" id="userInfo" style="display: none;">
             <span>👤 <span id="currentUser"></span></span>
             <button onclick="logout()">退出</button>
         </div>
@@ -706,18 +728,50 @@
 
     <script>
         // ================== 配置区域 ==================
-        // ⚠️ 重要：请将此处的URL替换为你的实际后端地址
+        // ⚠️ 重要：修改为你的后端API地址
         const API_BASE = 'https://pansou.glovetvbox.top/api';
+        
+        // 认证配置：如果后端启用了 AUTH_ENABLED=true，设为 true
+        // 如果后端未启用认证或不确定，设为 false
+        const AUTH_REQUIRED = true;
         
         let authToken = localStorage.getItem('pansou_token') || '';
         let currentUsername = localStorage.getItem('pansou_user') || '';
+        let isGuestMode = localStorage.getItem('pansou_guest') === 'true';
 
         // ================== 认证功能 ==================
         window.onload = function() {
-            if (authToken) {
+            if (AUTH_REQUIRED) {
+                // 需要认证模式
+                if (authToken) {
+                    showMainContent();
+                    verifyToken();
+                }
+            } else {
+                // 可选认证模式：有token就显示用户信息，没有也能用
                 showMainContent();
+                if (authToken && currentUsername) {
+                    document.getElementById('userInfo').style.display = 'flex';
+                    document.getElementById('currentUser').textContent = currentUsername;
+                }
             }
         };
+
+        async function verifyToken() {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/verify`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    // Token无效，清除登录状态
+                    logout();
+                }
+            } catch (err) {
+                console.error('Token验证失败:', err);
+            }
+        }
 
         async function login() {
             const username = document.getElementById('loginUsername').value.trim();
@@ -749,28 +803,51 @@
 
                 authToken = data.token;
                 currentUsername = username;
+                isGuestMode = false;
                 localStorage.setItem('pansou_token', authToken);
                 localStorage.setItem('pansou_user', currentUsername);
+                localStorage.removeItem('pansou_guest');
 
                 showMainContent();
+                document.getElementById('userInfo').style.display = 'flex';
+                document.getElementById('currentUser').textContent = currentUsername;
 
             } catch (err) {
                 showLoginError(err.message || '登录失败，请检查用户名密码');
-                console.error('登录错误:', err);
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = '登录';
             }
         }
 
+        function skipLogin() {
+            isGuestMode = true;
+            authToken = '';
+            currentUsername = '游客';
+            localStorage.setItem('pansou_guest', 'true');
+            localStorage.removeItem('pansou_token');
+            localStorage.removeItem('pansou_user');
+            
+            showMainContent();
+            document.getElementById('userInfo').style.display = 'none';
+        }
+
         function logout() {
             authToken = '';
             currentUsername = '';
+            isGuestMode = false;
             localStorage.removeItem('pansou_token');
             localStorage.removeItem('pansou_user');
-            document.getElementById('loginContainer').classList.remove('hide');
-            document.getElementById('mainContent').classList.remove('show');
-            document.getElementById('loginPassword').value = '';
+            localStorage.removeItem('pansou_guest');
+            
+            if (AUTH_REQUIRED) {
+                document.getElementById('loginContainer').classList.remove('hide');
+                document.getElementById('mainContent').classList.remove('show');
+                document.getElementById('loginPassword').value = '';
+            } else {
+                document.getElementById('userInfo').style.display = 'none';
+                showToast('已退出登录');
+            }
         }
 
         function showLoginError(message) {
@@ -782,7 +859,6 @@
         function showMainContent() {
             document.getElementById('loginContainer').classList.add('hide');
             document.getElementById('mainContent').classList.add('show');
-            document.getElementById('currentUser').textContent = currentUsername;
         }
 
         function getAuthHeaders() {
@@ -804,6 +880,7 @@
             'tianyi': { name: '天翼云盘', color: '#e83e8c', icon: '🔴' },
             'quark': { name: '夸克网盘', color: '#6610f2', icon: '🟣' },
             'baidu': { name: '百度网盘', color: '#0d6efd', icon: '🔵' },
+            'pikpak': { name: 'PikPak', color: '#d63384', icon: '📦' },
             'others': { name: '其他网盘', color: '#6c757d', icon: '📁' },
             'magnet': { name: '磁力链接', color: '#e91e63', icon: '🧲' },
             'ed2k': { name: '电驴链接', color: '#3f51b5', icon: '🐴' }
@@ -845,8 +922,10 @@
             const keyword = keywordInput.value.trim();
             if (!keyword) return;
 
-            if (!authToken) {
-                showError('缺少认证令牌，请先登录');
+            // 检查是否需要登录
+            if (AUTH_REQUIRED && !authToken) {
+                logout();
+                showLoginError('请先登录');
                 return;
             }
 
@@ -860,49 +939,55 @@
             allResources = [];
 
             try {
-                const params = new URLSearchParams();
-                params.append('kw', keyword);
+                // 构建POST请求体（根据后端API文档）
+                const requestBody = {
+                    kw: keyword
+                };
 
-                if (resultType.value !== 'merge') params.append('res', resultType.value);
-                if (sourceType.value !== 'all') params.append('src', sourceType.value);
-                if (concurrency.value) params.append('conc', concurrency.value);
+                // 添加可选参数
+                if (resultType.value !== 'merge') requestBody.res = resultType.value;
+                if (sourceType.value !== 'all') requestBody.src = sourceType.value;
+                if (concurrency.value) requestBody.conc = parseInt(concurrency.value);
+                if (refresh.checked) requestBody.refresh = true;
+                
+                // 处理频道列表
                 if (channels.value && channels.value.trim() !== '') {
                     const channelList = channels.value.split('\n').map(c => c.trim()).filter(c => c);
-                    if (channelList.length > 0) params.append('channels', JSON.stringify(channelList));
+                    if (channelList.length > 0) {
+                        requestBody.channels = channelList;
+                    }
                 }
-                if (refresh.checked) params.append('refresh', 'true');
 
-                const url = `${API_BASE}/api/search?${params.toString()}`;
-                console.log('请求URL:', url);
-                console.log('请求头:', getAuthHeaders());
+                console.log('请求体:', requestBody);
 
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: getAuthHeaders()
+                const response = await fetch(`${API_BASE}/api/search`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(requestBody)
                 });
 
+                // 处理401错误
                 if (response.status === 401) {
                     const errorData = await response.json().catch(() => ({}));
-                    const errorMsg = errorData.error || '登录已过期，请重新登录';
-                    showError(errorMsg);
-                    // 延迟登出，让用户看到错误信息
-                    setTimeout(() => {
+                    if (AUTH_REQUIRED) {
                         logout();
-                        showLoginError(errorMsg);
-                    }, 1500);
+                        showLoginError('登录已过期，请重新登录');
+                    } else {
+                        showError(`认证失败: ${errorData.error || '请检查后端认证配置'}`);
+                    }
                     throw new Error('未授权');
                 }
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
                 console.log('API响应:', data);
 
                 if (data.code !== 0 && data.code !== undefined) {
-                    throw new Error(data.message || data.error || '搜索失败');
+                    throw new Error(data.message || '搜索失败');
                 }
 
                 displayResults(data);
@@ -910,7 +995,6 @@
             } catch (err) {
                 if (err.message !== '未授权') {
                     showError(`搜索失败: ${err.message}`);
-                    console.error('搜索错误:', err);
                 }
             } finally {
                 hideLoading();
@@ -921,7 +1005,34 @@
             tabsNav.innerHTML = '';
             tabsContent.innerHTML = '';
 
+            // 适配不同的响应格式
             let mergedByType = data.data?.merged_by_type || data.merged_by_type;
+            
+            if (!mergedByType || Object.keys(mergedByType).length === 0) {
+                // 检查是否有results字段
+                const results = data.data?.results || data.results;
+                if (results && results.length > 0) {
+                    // 手动按类型分组
+                    mergedByType = {};
+                    results.forEach(item => {
+                        if (item.links && item.links.length > 0) {
+                            item.links.forEach(link => {
+                                const type = link.type || 'others';
+                                if (!mergedByType[type]) mergedByType[type] = [];
+                                mergedByType[type].push({
+                                    url: link.url,
+                                    password: link.password,
+                                    note: item.title || link.work_title || '资源链接',
+                                    datetime: link.datetime || item.datetime,
+                                    source: `tg:${item.channel}`,
+                                    images: item.images || []
+                                });
+                            });
+                        }
+                    });
+                }
+            }
+
             if (!mergedByType || Object.keys(mergedByType).length === 0) {
                 showEmptyState();
                 return;
