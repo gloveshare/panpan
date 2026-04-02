@@ -706,6 +706,7 @@
 
     <script>
         // ================== 配置区域 ==================
+        // ⚠️ 重要：请将此处的URL替换为你的实际后端地址
         const API_BASE = 'https://pansou.glovetvbox.top/api';
         
         let authToken = localStorage.getItem('pansou_token') || '';
@@ -743,7 +744,7 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || '登录失败');
+                    throw new Error(data.error || data.message || '登录失败');
                 }
 
                 authToken = data.token;
@@ -755,6 +756,7 @@
 
             } catch (err) {
                 showLoginError(err.message || '登录失败，请检查用户名密码');
+                console.error('登录错误:', err);
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = '登录';
@@ -844,8 +846,7 @@
             if (!keyword) return;
 
             if (!authToken) {
-                logout();
-                showLoginError('登录已过期，请重新登录');
+                showError('缺少认证令牌，请先登录');
                 return;
             }
 
@@ -873,6 +874,7 @@
 
                 const url = `${API_BASE}/api/search?${params.toString()}`;
                 console.log('请求URL:', url);
+                console.log('请求头:', getAuthHeaders());
 
                 const response = await fetch(url, {
                     method: 'GET',
@@ -880,20 +882,27 @@
                 });
 
                 if (response.status === 401) {
-                    logout();
-                    showLoginError('登录已过期，请重新登录');
+                    const errorData = await response.json().catch(() => ({}));
+                    const errorMsg = errorData.error || '登录已过期，请重新登录';
+                    showError(errorMsg);
+                    // 延迟登出，让用户看到错误信息
+                    setTimeout(() => {
+                        logout();
+                        showLoginError(errorMsg);
+                    }, 1500);
                     throw new Error('未授权');
                 }
 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
                 }
 
                 const data = await response.json();
                 console.log('API响应:', data);
 
-                if (data.code !== 0) {
-                    throw new Error(data.message || '搜索失败');
+                if (data.code !== 0 && data.code !== undefined) {
+                    throw new Error(data.message || data.error || '搜索失败');
                 }
 
                 displayResults(data);
@@ -901,6 +910,7 @@
             } catch (err) {
                 if (err.message !== '未授权') {
                     showError(`搜索失败: ${err.message}`);
+                    console.error('搜索错误:', err);
                 }
             } finally {
                 hideLoading();
