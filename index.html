@@ -713,34 +713,30 @@
         let currentUsername = localStorage.getItem('pansou_user') || '';
 
         // ================== 认证功能 ==================
-        window.onload = function() {
+        window.onload = async function() {
             if (authToken) {
-                // 可选：验证 token 是否仍然有效
-                verifyTokenAndShowMain();
-            }
-        };
-
-        async function verifyTokenAndShowMain() {
-            try {
-                const response = await fetch(`${API_BASE}/api/auth/verify`, {
-                    method: 'POST',
-                    headers: getAuthHeaders()
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.valid) {
-                        showMainContent();
-                    } else {
-                        // token 无效，清除本地存储
-                        logout();
-                    }
+                if (await verifyToken()) {
+                    showMainContent();
                 } else {
                     logout();
                 }
-            } catch (err) {
-                console.error('验证 token 失败:', err);
-                logout();
+            }
+        };
+
+        async function verifyToken() {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) return false;
+                const data = await response.json();
+                return data.valid === true;
+            } catch {
+                return false;
             }
         }
 
@@ -760,7 +756,6 @@
             loginError.classList.remove('show');
 
             try {
-                // 严格按照官方文档: POST /api/auth/login
                 const response = await fetch(`${API_BASE}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -769,50 +764,35 @@
 
                 const data = await response.json();
 
-                if (!response.ok) {
-                    // 处理错误响应 (官方文档格式: {"error": "用户名或密码错误"})
-                    throw new Error(data.error || `登录失败 (${response.status})`);
+                if (!response.ok || !data.token) {
+                    throw new Error(data.error || '登录失败');
                 }
 
-                // 官方文档成功响应直接包含 token, expires_at, username
-                if (data.token) {
-                    authToken = data.token;
-                    currentUsername = data.username || username;
-                    localStorage.setItem('pansou_token', authToken);
-                    localStorage.setItem('pansou_user', currentUsername);
+                authToken = data.token;
+                currentUsername = data.username || username;
 
-                    showMainContent();
-                } else {
-                    throw new Error('登录响应无效，未获取到 token');
-                }
+                localStorage.setItem('pansou_token', authToken);
+                localStorage.setItem('pansou_user', currentUsername);
 
+                showMainContent();
             } catch (err) {
-                console.error('登录错误:', err);
-                showLoginError(err.message || '登录失败，请检查网络或用户名密码');
-                // 清除可能存在的旧 token
-                logout(false); // false 表示不递归调用，只清除本地存储
+                showLoginError(err.message || '登录失败，请检查用户名密码');
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = '登录';
             }
         }
 
-        function logout(shouldRedirect = true) {
+        function logout() {
             authToken = '';
             currentUsername = '';
             localStorage.removeItem('pansou_token');
             localStorage.removeItem('pansou_user');
-            
-            if (shouldRedirect) {
-                // 重置界面
-                document.getElementById('loginContainer').classList.remove('hide');
-                document.getElementById('mainContent').classList.remove('show');
-                document.getElementById('loginPassword').value = '';
-                // 清除可能显示的错误信息
-                const loginError = document.getElementById('loginError');
-                loginError.classList.remove('show');
-                loginError.textContent = '';
-            }
+            document.getElementById('loginContainer').classList.remove('hide');
+            document.getElementById('mainContent').classList.remove('show');
+            // 清空密码框
+            const pwdInput = document.getElementById('loginPassword');
+            if (pwdInput) pwdInput.value = '';
         }
 
         function showLoginError(message) {
@@ -830,7 +810,6 @@
         function getAuthHeaders() {
             const headers = { 'Content-Type': 'application/json' };
             if (authToken) {
-                // 严格按照官方文档格式: Authorization: Bearer <token>
                 headers['Authorization'] = `Bearer ${authToken}`;
             }
             return headers;
@@ -916,7 +895,6 @@
                 }
                 if (refresh.checked) params.append('refresh', 'true');
 
-                // 使用 GET 方法，与官方文档示例一致
                 const url = `${API_BASE}/api/search?${params.toString()}`;
                 console.log('请求URL:', url);
 
@@ -926,10 +904,9 @@
                 });
 
                 if (response.status === 401) {
-                    // 未授权或 token 失效，清除本地状态并提示重新登录
                     logout();
                     showLoginError('登录已过期，请重新登录');
-                    throw new Error('未授权');
+                    return;
                 }
 
                 if (!response.ok) {
@@ -944,13 +921,9 @@
                 const data = await response.json();
                 console.log('API响应:', data);
 
-                // 官方文档成功响应包含 code 字段，code为0表示成功
-                if (data.code !== undefined && data.code !== 0) {
-                    throw new Error(data.message || '搜索失败');
-                }
-
-                // 兼容可能的数据结构：data.data 或直接 data.merged_by_type
+                // 兼容两种数据格式
                 let mergedByType = data.data?.merged_by_type || data.merged_by_type;
+                
                 if (!mergedByType || Object.keys(mergedByType).length === 0) {
                     showEmptyState();
                     return;
@@ -959,10 +932,8 @@
                 displayResults({ merged_by_type: mergedByType });
 
             } catch (err) {
-                if (err.message !== '未授权') {
-                    console.error('搜索错误:', err);
-                    showError(`搜索失败: ${err.message}`);
-                }
+                console.error('搜索错误:', err);
+                showError(`搜索失败: ${err.message}`);
             } finally {
                 hideLoading();
             }
@@ -1162,9 +1133,12 @@
         }
 
         // 回车键登录
-        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') login();
-        });
+        const pwdInput = document.getElementById('loginPassword');
+        if (pwdInput) {
+            pwdInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') login();
+            });
+        }
     </script>
 </body>
 </html>
