@@ -839,74 +839,76 @@
             await performSearch();
         });
 
-        async function performSearch() {
-            const keyword = keywordInput.value.trim();
-            if (!keyword) return;
+async function performSearch() {
+    const keyword = keywordInput.value.trim();
+    if (!keyword) return;
 
-            if (!authToken) {
-                logout();
-                showLoginError('登录已过期，请重新登录');
-                return;
-            }
+    if (!authToken) {
+        logout();
+        showLoginError('登录已过期，请重新登录');
+        return;
+    }
 
-            showLoading();
-            hideError();
-            hideResults();
+    showLoading();
+    hideError();
+    hideResults();
 
-            tabsNav.innerHTML = '';
-            tabsContent.innerHTML = '';
-            currentResults = {};
-            allResources = [];
+    tabsNav.innerHTML = '';
+    tabsContent.innerHTML = '';
+    currentResults = {};
+    allResources = [];
 
-            try {
-                const params = new URLSearchParams();
-                params.append('kw', keyword);
+    try {
+        const params = new URLSearchParams();
+        params.append('kw', keyword);
 
-                if (resultType.value !== 'merge') params.append('res', resultType.value);
-                if (sourceType.value !== 'all') params.append('src', sourceType.value);
-                if (concurrency.value) params.append('conc', concurrency.value);
-                if (channels.value && channels.value.trim() !== '') {
-                    const channelList = channels.value.split('\n').map(c => c.trim()).filter(c => c);
-                    if (channelList.length > 0) params.append('channels', JSON.stringify(channelList));
-                }
-                if (refresh.checked) params.append('refresh', 'true');
+        if (resultType.value !== 'merge') params.append('res', resultType.value);
+        if (sourceType.value !== 'all') params.append('src', sourceType.value);
+        if (concurrency.value) params.append('conc', concurrency.value);
+        if (channels.value && channels.value.trim() !== '') {
+            const channelList = channels.value.split('\n').map(c => c.trim()).filter(c => c);
+            if (channelList.length > 0) params.append('channels', JSON.stringify(channelList));
+        }
+        if (refresh.checked) params.append('refresh', 'true');
 
-                const url = `${API_BASE}/api/search?${params.toString()}`;
-                console.log('请求URL:', url);
+        const url = `${API_BASE}/api/search?${params.toString()}`;
+        console.log('请求URL:', url);
 
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: getAuthHeaders()
-                });
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: getAuthHeaders(),
+            signal: AbortSignal.timeout(60000)  // 60秒超时
+        });
 
-                if (response.status === 401) {
-                    logout();
-                    showLoginError('登录已过期，请重新登录');
-                    throw new Error('未授权');
-                }
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                console.log('API响应:', data);
-
-                if (data.code !== 0) {
-                    throw new Error(data.message || '搜索失败');
-                }
-
-                displayResults(data);
-
-            } catch (err) {
-                if (err.message !== '未授权') {
-                    showError(`搜索失败: ${err.message}`);
-                }
-            } finally {
-                hideLoading();
-            }
+        if (response.status === 401) {
+            logout();
+            showLoginError('登录已过期，请重新登录');
+            throw new Error('未授权');
         }
 
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('API响应:', data);
+
+        if (data.code !== 0) {
+            throw new Error(data.message || '搜索失败');
+        }
+
+        displayResults(data);
+
+    } catch (err) {
+        if (err.name === 'TimeoutError') {
+            showError('搜索超时，请稍后重试');
+        } else if (err.message !== '未授权') {
+            showError(`搜索失败: ${err.message}`);
+        }
+    } finally {
+        hideLoading();
+    }
+}
         function displayResults(data) {
             tabsNav.innerHTML = '';
             tabsContent.innerHTML = '';
