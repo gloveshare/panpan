@@ -904,7 +904,7 @@
 
         function generateTabs(mergedByType) {
             const allCount = Object.values(mergedByType).reduce((sum, r) => sum + r.length, 0);
-            createTab('all', '全部test1234', '📋', allCount, true);
+            createTab('all', '全部', '📋', allCount, true);
 
             for (const [platformType, resources] of Object.entries(mergedByType)) {
                 const info = PAN_TYPES[platformType] || { name: platformType, color: '#6c757d', icon: '📁' };
