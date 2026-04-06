@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>皮蛋搜索</title>
+    <title>PanSou 网盘搜索</title>
     <style>
         * {
             margin: 0;
@@ -168,6 +168,18 @@
             font-size: 1.1em;
             opacity: 0.9;
             margin-bottom: 15px;
+        }
+
+        .header .credits {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 15px;
+        }
+
+        .header .credits a {
+            color: white;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
         }
 
         .search-section {
@@ -463,7 +475,7 @@
             background: white;
             border-radius: 15px;
             padding: 30px;
-            margin: 30px auto 15px auto;
+            margin: 30px auto;
             max-width: 800px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
@@ -508,10 +520,16 @@
 
         .footer {
             text-align: center;
-            padding: 20px;
+            padding: 30px 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            margin-top: 15px;
+            margin-top: 50px;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
         }
 
         .toast {
@@ -553,14 +571,13 @@
     <!-- 登录界面 -->
     <div class="login-container" id="loginContainer">
         <div class="login-box">
-        <h2>🔐 皮蛋 登录</h2>
-        <input type="text" id="loginUsername" placeholder="用户名" value="admin">
-        <input type="password" id="loginPassword" placeholder="密码">
-        <button onclick="login()" id="loginBtn">登录</button>
-        <button onclick="window.open('https://www.bing.cn', '_blank')" id="registerBtn" style="margin-top: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">注册</button>
-        <div class="login-error" id="loginError"></div>
-</div>
-
+            <h2>🔐 PanSou 登录</h2>
+            <input type="text" id="loginUsername" placeholder="用户名" value="admin">
+            <input type="password" id="loginPassword" placeholder="密码">
+            <button onclick="login()" id="loginBtn">登录</button>
+            <div class="login-error" id="loginError"></div>
+        </div>
+    </div>
 
     <!-- 主内容 -->
     <div class="main-content" id="mainContent">
@@ -571,8 +588,12 @@
 
         <div class="container">
             <div class="header">
-                <h1>🔍 皮蛋搜索</h1>
-                <p>皮蛋搜索引擎 - 支持多种网盘类型搜索</p>
+                <h1>🔍 PanSou 网盘搜索</h1>
+                <p>高性能网盘资源搜索引擎 - 支持多种网盘类型和Telegram频道搜索</p>
+                <div class="credits">
+                    基于 <a href="https://github.com/fish2018/pansou" target="_blank">PanSou API</a> 构建 |
+                    原作者：<a href="https://github.com/fish2018" target="_blank">fish2018</a>
+                </div>
             </div>
 
             <div class="search-section">
@@ -603,7 +624,7 @@
                                 <label for="sourceType">数据来源</label>
                                 <select id="sourceType">
                                     <option value="all">全部来源 (默认)</option>
-                                    <option value="tg">仅 ✈️</option>
+                                    <option value="tg">仅 Telegram</option>
                                     <option value="plugin">仅插件</option>
                                 </select>
                             </div>
@@ -650,7 +671,7 @@
                     <ul>
                         <li>使用具体的关键词能获得更精准的结果</li>
                         <li>支持搜索电影、软件、文档、音乐等各类资源</li>
-                        
+                        <li>建议在高级选项中自定义搜索频道</li>
                     </ul>
                 </div>
             </div>
@@ -672,7 +693,14 @@
         </div>
 
         <div class="footer">
-            <p>皮蛋搜索</p>
+            <p>
+                本站基于开源项目 <a href="https://github.com/fish2018/pansou" target="_blank">PanSou</a> 构建<br>
+                原作者：<a href="https://github.com/fish2018" target="_blank">fish2018</a> |
+                感谢提供优秀的网盘搜索API服务<br>
+                <small style="opacity: 0.8; margin-top: 10px; display: block;">
+                    本站仅提供搜索服务，不存储任何文件
+                </small>
+            </p>
         </div>
     </div>
 
